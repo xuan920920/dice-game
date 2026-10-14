@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 骰子對戰遊戲</title>
+    <style>
+        :root {
+            --bg-color: #1a1e24;
+            --panel-bg: #262c35;
+            --accent-cyan: #00e1d9;
+            --accent-gold: #ffb703;
+            --win-color: #06d6a0;
+            --lose-color: #ef476f;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background: var(--bg-color);
+            color: #f1f5f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-size: 22px;
+            letter-spacing: 1px;
+            color: var(--accent-cyan);
+        }
+
+        /* 戰績計分板 */
+        .scoreboard {
+            background: var(--panel-bg);
+            border: 1px solid #3b4252;
+            border-radius: 12px;
+            padding: 12px 24px;
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+
+        .score-col {
+            text-align: center;
+        }
+
+        .score-col .num {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-gold);
+        }
+
+        .score-col .label {
+            font-size: 11px;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        /* 對戰舞台 */
+        .battle-arena {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: 24px;
+        }
+
+        .player-zone {
+            flex: 1;
+            min-width: 320px;
+            background: var(--panel-bg);
+            border-radius: 16px;
+            padding: 20px;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .player-zone.active {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 225, 217, 0.25);
+        }
+
+        .zone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .zone-title {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .zone-score {
+            font-size: 14px;
+            color: var(--accent-gold);
+            font-weight: bold;
+        }
+
+        /* 骰子展示托盤 */
+        .dice-tray {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            padding: 24px 0;
+            perspective: 800px;
+        }
+
+        /* 3D 骰子主體 */
+        .dice-wrapper {
+            width: 54px;
+            height: 54px;
+            position: relative;
+        }
+
+        .dice {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.15, 0.9, 0.3, 1.2);
+        }
+
+        .face {
+            position: absolute;
+            width: 54px;
+            height: 54px;
+            background: #fdfdfd;
+            border-radius: 8px;
+            border: 1px solid #dcdcdc;
+            box-shadow: inset 0 0 8px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 6px;
+        }
+
+        /* 骰子 6 面 3D 空間定位 (半徑 27px) */
+        .face.front  { transform: rotateY(0deg) translateZ(27px); }
+        .face.back   { transform: rotateY(180deg) translateZ(27px); }
+        .face.right  { transform: rotateY(90deg) translateZ(27px); }
+        .face.left   { transform: rotateY(-90deg) translateZ(27px); }
+        .face.top    { transform: rotateX(90deg) translateZ(27px); }
+        .face.bottom { transform: rotateX(-90deg) translateZ(27px); }
+
+        /* 點數樣式 */
+        .pip {
+            width: 9px;
+            height: 9px;
+            background: #2b2b2b;
+            border-radius: 50%;
+            align-self: center;
+            justify-self: center;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+        }
+
+        .pip.red {
+            background: #e63946;
+            width: 14px;
+            height: 14px;
+        }
+
+        /* 旋轉角度對應朝上面 */
+        .show-1 { transform: rotateX(0deg) rotateY(0deg); }
+        .show-2 { transform: rotateY(-90deg); }
+        .show-3 { transform: rotateX(-90deg); }
+        .show-4 { transform: rotateX(90deg); }
+        .show-5 { transform: rotateY(90deg); }
+        .show-6 { transform: rotateY(180deg); }
+
+        /* 控制按鈕與提示 */
+        .status-banner {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 16px;
+            min-height: 28px;
+            text-align: center;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            background: var(--accent-cyan);
+            color: #0b0f14;
+            border: none;
+            padding: 12px 28px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        button.btn-reset {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid #475569;
+        }
+        
+        button.btn-reset:hover {
+            color: #fff;
+            border-color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>3D 骰子對戰遊戲 (回合制)</h1>
+    </header>
+
+    <!-- 戰績板 -->
+    <div class="scoreboard">
+        <div class="score-col">
+            <div class="num" id="stat-matches">0</div>
+            <div class="label">Matches</div>
+        </div>
+        <div class="score-col">
+            <div class="num" id="stat-user-wins" style="color: var(--win-color);">0</div>
+            <div class="label">YOU WINS</div>
+        </div>
+        <div class="score-col">
+            <div class="num" id="stat-comp-wins" style="color: var(--lose-color);">0</div>
+            <div class="label">AI WINS</div>
+        </div>
+        <div class="score-col">
+            <div class="num" id="stat-draws" style="color: #cbd5e1;">0</div>
+            <div class="label">DRAWS</div>
+        </div>
+    </div>
+
+    <!-- 對戰主舞台 -->
+    <div class="battle-arena">
+        <!-- 玩家側 -->
+        <div class="player-zone active" id="zone-user">
+            <div class="zone-header">
+                <span class="zone-title" style="color: var(--win-color);">玩家 (YOU)</span>
+                <span class="zone-score" id="user-score-label">點數: -</span>
+            </div>
+            <div class="dice-tray" id="user-tray"></div>
+        </div>
+
+        <!-- 電腦側 -->
+        <div class="player-zone" id="zone-comp">
+            <div class="zone-header">
+                <span class="zone-title" style="color: #38bdf8;">電腦 (AI)</span>
+                <span class="zone-score" id="comp-score-label">點數: -</span>
+            </div>
+            <div class="dice-tray" id="comp-tray"></div>
+        </div>
+    </div>
+
+    <!-- 狀態通知 -->
+    <div class="status-banner" id="status-banner">輪到你了！請按下「玩家擲骰」</div>
+
+    <!-- 操作按鈕 -->
+    <div class="controls">
+        <button id="btn-action" onclick="handleAction()">玩家擲骰 (SPACE)</button>
+        <button class="btn-reset" onclick="resetStats()">重置戰績 (R)</button>
+    </div>
+
+    <script>
+        // --- 狀態管理 ---
+        let currentStep = 'USER_TURN'; // 'USER_TURN' -> 'COMP_TURN' -> 'ROUND_OVER'
+        let userValues = [1, 1, 1];
+        let compValues = [1, 1, 1];
+        let stats = { matches: 0, userWins: 0, compWins: 0, draws: 0 };
+        let isRolling = false;
+
+        // --- Web Audio 音效產生器 (免任何音檔) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playClackSound() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(550 + Math.random() * 120, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.04);
+            
+            gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.04);
+        }
+
+        // --- 建立單顆立體骰子 HTML ---
+        function createDiceHTML(idPrefix) {
+            return `
+            <div class="dice-wrapper">
+                <div class="dice show-1" id="${idPrefix}">
+                    <!-- 1點 (正面) -->
+                    <div class="face front"><div class="pip red" style="grid-area: 2 / 2;"></div></div>
+                    <!-- 2點 (背面) -->
+                    <div class="face right"><div class="pip" style="grid-area: 1 / 1;"></div><div class="pip" style="grid-area: 3 / 3;"></div></div>
+                    <!-- 3點 (右側) -->
+                    <div class="face top"><div class="pip" style="grid-area: 1 / 1;"></div><div class="pip" style="grid-area: 2 / 2;"></div><div class="pip" style="grid-area: 3 / 3;"></div></div>
+                    <!-- 4點 (左側) -->
+                    <div class="face bottom"><div class="pip" style="grid-area: 1 / 1;"></div><div class="pip" style="grid-area: 1 / 3;"></div><div class="pip" style="grid-area: 3 / 1;"></div><div class="pip" style="grid-area: 3 / 3;"></div></div>
+                    <!-- 5點 (頂面) -->
+                    <div class="face left"><div class="pip" style="grid-area: 1 / 1;"></div><div class="pip" style="grid-area: 1 / 3;"></div><div class="pip" style="grid-area: 2 / 2;"></div><div class="pip" style="grid-area: 3 / 1;"></div><div class="pip" style="grid-area: 3 / 3;"></div></div>
+                    <!-- 6點 (底面) -->
+                    <div class="face back"><div class="pip" style="grid-area: 1 / 1;"></div><div class="pip" style="grid-area: 2 / 1;"></div><div class="pip" style="grid-area: 3 / 1;"></div><div class="pip" style="grid-area: 1 / 3;"></div><div class="pip" style="grid-area: 2 / 3;"></div><div class="pip" style="grid-area: 3 / 3;"></div></div>
+                </div>
+            </div>`;
+        }
+
+        // --- 初始化渲染骰子托盤 ---
+        function initTrays() {
+            const userTray = document.getElementById('user-tray');
+            const compTray = document.getElementById('comp-tray');
+            userTray.innerHTML = [0, 1, 2].map(i => createDiceHTML(`u-dice-${i}`)).join('');
+            compTray.innerHTML = [0, 1, 2].map(i => createDiceHTML(`c-dice-${i}`)).join('');
+        }
+
+        // --- 執行翻滾動畫與音效 ---
+        function rollDiceGroup(target, callback) {
+            isRolling = true;
+            const prefix = target === 'USER' ? 'u-dice-' : 'c-dice-';
+            const finalVals = [0, 0, 0].map(() => Math.floor(Math.random() * 6) + 1);
+
+            let frame = 0;
+            const totalFrames = 14;
+            const timer = setInterval(() => {
+                frame++;
+                playClackSound();
+                for (let i = 0; i < 3; i++) {
+                    const temp = Math.floor(Math.random() * 6) + 1;
+                    const diceEl = document.getElementById(prefix + i);
+                    diceEl.className = `dice show-${temp}`;
+                    // 加上動態旋轉雜訊
+                    diceEl.style.transform += ` rotateX(${Math.random()*40-20}deg) rotateY(${Math.random()*40-20}deg)`;
+                }
+                if (frame >= totalFrames) {
+                    clearInterval(timer);
+                    playClackSound();
+                    // 定格最終點數
+                    for (let i = 0; i < 3; i++) {
+                        const diceEl = document.getElementById(prefix + i);
+                        diceEl.className = `dice show-${finalVals[i]}`;
+                        diceEl.style.transform = '';
+                    }
+                    isRolling = false;
+                    callback(finalVals);
+                }
+            }, 60);
+        }
+
+        // --- 回合按鈕邏輯 ---
+        function handleAction() {
+            if (isRolling) return;
+            const btn = document.getElementById('btn-action');
+            const banner = document.getElementById('status-banner');
+
+            if (currentStep === 'USER_TURN') {
+                btn.disabled = true;
+                rollDiceGroup('USER', (vals) => {
+                    userValues = vals;
+                    const sum = vals.reduce((a, b) => a + b, 0);
+                    document.getElementById('user-score-label').textContent = `點數: ${sum} (${vals.join('+')})`;
+                    
+                    // 切換至電腦回合
+                    currentStep = 'COMP_TURN';
+                    document.getElementById('zone-user').classList.remove('active');
+                    document.getElementById('zone-comp').classList.add('active');
+                    banner.textContent = '輪到電腦了！請按下「電腦擲骰」';
+                    btn.textContent = '電腦擲骰 (SPACE)';
+                    btn.disabled = false;
+                });
+            } else if (currentStep === 'COMP_TURN') {
+                btn.disabled = true;
+                rollDiceGroup('COMP', (vals) => {
+                    compValues = vals;
+                    const cSum = vals.reduce((a, b) => a + b, 0);
+                    const uSum = userValues.reduce((a, b) => a + b, 0);
+                    document.getElementById('comp-score-label').textContent = `點數: ${cSum} (${vals.join('+')})`;
+
+                    // 結算勝負
+                    stats.matches++;
+                    if (uSum > cSum) {
+                        stats.userWins++;
+                        banner.textContent = `🎉 恭喜你獲勝！ (${uSum} 比 ${cSum})`;
+                        banner.style.color = 'var(--win-color)';
+                    } else if (uSum < cSum) {
+                        stats.compWins++;
+                        banner.textContent = `💀 電腦獲勝！ (${uSum} 比 ${cSum})`;
+                        banner.style.color = 'var(--lose-color)';
+                    } else {
+                        stats.draws++;
+                        banner.textContent = `🤝 平手！ (${uSum} 比 ${cSum})`;
+                        banner.style.color = '#cbd5e1';
+                    }
+                    updateScoreboard();
+
+                    // 準備下一輪
+                    currentStep = 'ROUND_OVER';
+                    btn.textContent = '下一局 (SPACE)';
+                    btn.disabled = false;
+                });
+            } else if (currentStep === 'ROUND_OVER') {
+                // 重設面板狀態
+                currentStep = 'USER_TURN';
+                document.getElementById('zone-comp').classList.remove('active');
+                document.getElementById('zone-user').classList.add('active');
+                banner.textContent = '新回合開始！請玩家擲骰';
+                banner.style.color = '#ffffff';
+                btn.textContent = '玩家擲骰 (SPACE)';
+            }
+        }
+
+        // --- 鍵盤快捷鍵 ---
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                handleAction();
+            } else if (e.code === 'KeyR') {
+                resetStats();
+            }
+        });
+
+        // --- 更新儀表板 ---
+        function updateScoreboard() {
+            document.getElementById('stat-matches').textContent = stats.matches;
+            document.getElementById('stat-user-wins').textContent = stats.userWins;
+            document.getElementById('stat-comp-wins').textContent = stats.compWins;
+            document.getElementById('stat-draws').textContent = stats.draws;
+        }
+
+        // --- 重置戰績 ---
+        function resetStats() {
+            stats = { matches: 0, userWins: 0, compWins: 0, draws: 0 };
+            updateScoreboard();
+            document.getElementById('status-banner').textContent = '戰績已歸零！請按「玩家擲骰」';
+            document.getElementById('status-banner').style.color = '#ffffff';
+            currentStep = 'USER_TURN';
+            document.getElementById('zone-comp').classList.remove('active');
+            document.getElementById('zone-user').classList.add('active');
+            document.getElementById('btn-action').textContent = '玩家擲骰 (SPACE)';
+            document.getElementById('user-score-label').textContent = '點數: -';
+            document.getElementById('comp-score-label').textContent = '點數: -';
+        }
+
+        // 啟動初始化
+        initTrays();
+    </script>
+</body>
+</html>
